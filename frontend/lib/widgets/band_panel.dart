@@ -24,7 +24,9 @@ class BandPanel extends ConsumerStatefulWidget {
   /// Called when a measurement ends with at least one reading.
   final ValueChanged<Vitals> onFinished;
 
-  /// Offered when the band cannot be used or failed; null hides it.
+  /// Offered only when this kiosk has no usable band at all; null hides
+  /// it. Vitals are a must (the user's rule of 2026-10-29): a measurement
+  /// that fails is tried again, never skipped.
   final VoidCallback? onSkip;
 
   @override
@@ -259,10 +261,6 @@ class _BandPanelState extends ConsumerState<BandPanel> {
                     label: Text(s.measureAgain),
                   ),
                 ),
-              ],
-              if (phase == BandPhase.failed && widget.onSkip != null) ...[
-                const SizedBox(height: 8),
-                _SkipButton(onPressed: widget.onSkip!),
               ],
             ],
           ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/strings.dart';
@@ -6,17 +7,16 @@ import '../state/intake_controller.dart';
 import '../theme/medora_theme.dart';
 import 'medora_scaffold.dart';
 
-/// "Have you visited before?": the people this hospital knows under the
-/// patient's phone number, as masked names, to pick from. Nothing else
-/// about them is ever shown here.
+/// "Have you visited before?": the patient types the visit number of an
+/// earlier visit (printed on that report) and picks themselves by full
+/// name and age (the user's choice of 2026-10-29, replacing a phone
+/// number and masked names). Nothing else about them is shown here.
 class VisitedBefore extends ConsumerStatefulWidget {
-  const VisitedBefore({super.key, required this.phone, required this.find});
+  const VisitedBefore({super.key, required this.find});
 
-  final String phone;
-
-  /// Looks a phone number up: the kiosk's or the phone page's endpoint.
+  /// Looks a visit number up: the kiosk's or the phone page's endpoint.
   final Future<List<({String id, String label, int? age})>> Function(
-    String phone,
+    String visit,
   )
   find;
 
@@ -25,19 +25,29 @@ class VisitedBefore extends ConsumerStatefulWidget {
 }
 
 class _VisitedBeforeState extends ConsumerState<VisitedBefore> {
-  late final _phone = TextEditingController(text: widget.phone);
+  final _visit = TextEditingController();
   List<({String id, String label, int? age})>? _found;
   bool _busy = false;
+  // The number typed is too short to be a visit number.
+  bool _short = false;
 
   @override
   void dispose() {
-    _phone.dispose();
+    _visit.dispose();
     super.dispose();
   }
 
   Future<void> _find() async {
-    setState(() => _busy = true);
-    final found = await widget.find(_phone.text.trim());
+    final visit = _visit.text.replaceAll(RegExp(r'[^0-9A-Za-z]'), '');
+    if (visit.length < 6) {
+      setState(() => _short = true);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _short = false;
+    });
+    final found = await widget.find(visit);
     if (mounted) {
       setState(() {
         _found = found;
@@ -80,12 +90,23 @@ class _VisitedBeforeState extends ConsumerState<VisitedBefore> {
               children: [
                 Expanded(
                   child: TextField(
-                    key: const Key('visited-phone'),
-                    controller: _phone,
-                    keyboardType: TextInputType.phone,
+                    key: const Key('visited-number'),
+                    controller: _visit,
+                    textCapitalization: TextCapitalization.characters,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'[0-9A-Za-z -]'),
+                      ),
+                      LengthLimitingTextInputFormatter(12),
+                    ],
+                    onSubmitted: (_) => _busy ? null : _find(),
                     decoration: InputDecoration(
-                      labelText: s.phone,
-                      prefixIcon: const Icon(Icons.phone_outlined),
+                      labelText: s.visitNumberLabel,
+                      hintText: 'AB12CD',
+                      errorText: _short ? s.visitNumberShort : null,
+                      prefixIcon: const Icon(
+                        Icons.confirmation_number_outlined,
+                      ),
                     ),
                   ),
                 ),

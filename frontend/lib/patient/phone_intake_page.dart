@@ -168,8 +168,7 @@ class _PhoneIntakePageState extends ConsumerState<PhoneIntakePage> {
           const SizedBox(height: 16),
         ],
         VisitedBefore(
-          phone: patient.phone,
-          find: (phone) => _api.phoneFindPatients(widget.code, phone),
+          find: (visit) => _api.phoneFindPatients(widget.code, visit),
         ),
         const SizedBox(height: 20),
         AbsorbPointer(

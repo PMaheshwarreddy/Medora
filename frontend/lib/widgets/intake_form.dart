@@ -7,6 +7,19 @@ import '../theme/medora_theme.dart';
 import 'medora_scaffold.dart';
 import 'suggestion_terms.dart';
 
+/// An Indian mobile number as its 10 digits ("+91 98765 43210",
+/// "098765 43210" and "9876543210" are the same), or null when it is not
+/// one: 10 digits starting with 6, 7, 8 or 9.
+String? indianMobile(String text) {
+  var digits = text.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.length == 12 && digits.startsWith('91')) {
+    digits = digits.substring(2);
+  } else if (digits.length == 11 && digits.startsWith('0')) {
+    digits = digits.substring(1);
+  }
+  return RegExp(r'^[6-9][0-9]{9}$').hasMatch(digits) ? digits : null;
+}
+
 /// Patient details, symptoms and medications. Used for manual entry and for
 /// the review step, where [flagMissing] marks required fields left empty.
 class IntakeForm extends StatefulWidget {
@@ -156,17 +169,31 @@ class _IntakeFormState extends State<IntakeForm> {
     return null;
   }
 
-  String? _validatePhone(String? v, S s) {
-    final digits = (v ?? '').replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.isEmpty) return s.enterPhone;
-    if (digits.length < 7 || digits.length > 15) return s.validPhone;
+  String? _validateName(String? v, S s) {
+    final name = v?.trim() ?? '';
+    if (name.isEmpty) return s.enterName;
+    // Letters of any script, spaces, dots, hyphens and apostrophes; at
+    // least two letters, and never a digit.
+    if (RegExp(r'[0-9]').hasMatch(name) ||
+        !RegExp(r"^[\p{L}\p{M} .'-]+$", unicode: true).hasMatch(name) ||
+        RegExp(r'\p{L}', unicode: true).allMatches(name).length < 2) {
+      return s.validName;
+    }
     return null;
+  }
+
+  String? _validatePhone(String? v, S s) {
+    final text = (v ?? '').trim();
+    if (text.isEmpty) return s.enterPhone;
+    return indianMobile(text) == null ? s.validPhone : null;
   }
 
   String? _validateEmail(String? v, S s) {
     final email = v?.trim() ?? '';
     if (email.isEmpty) return null;
-    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)
+    return RegExp(
+          r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$',
+        ).hasMatch(email)
         ? null
         : s.validEmail;
   }
@@ -217,11 +244,16 @@ class _IntakeFormState extends State<IntakeForm> {
               TextFormField(
                 controller: _name,
                 textCapitalization: TextCapitalization.words,
+                // Numbers cannot be typed into a name.
+                inputFormatters: [
+                  FilteringTextInputFormatter.deny(RegExp(r'[0-9]')),
+                  LengthLimitingTextInputFormatter(80),
+                ],
                 decoration: InputDecoration(
                   labelText: s.fullName,
                   prefixIcon: const Icon(Icons.badge_outlined),
                 ),
-                validator: (v) => _required(v, s.enterName),
+                validator: (v) => _validateName(v, s),
               ),
               _FieldRow(
                 children: [
@@ -241,6 +273,11 @@ class _IntakeFormState extends State<IntakeForm> {
                   TextFormField(
                     controller: _phone,
                     keyboardType: TextInputType.phone,
+                    // Digits, with an optional +91 and spaces.
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
+                      LengthLimitingTextInputFormatter(16),
+                    ],
                     decoration: InputDecoration(
                       labelText: s.phone,
                       prefixIcon: const Icon(Icons.phone_outlined),
@@ -291,6 +328,10 @@ class _IntakeFormState extends State<IntakeForm> {
               TextFormField(
                 controller: _email,
                 keyboardType: TextInputType.emailAddress,
+                inputFormatters: [
+                  FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                  LengthLimitingTextInputFormatter(120),
+                ],
                 decoration: InputDecoration(
                   labelText: s.emailOptional,
                   prefixIcon: const Icon(Icons.mail_outline_rounded),

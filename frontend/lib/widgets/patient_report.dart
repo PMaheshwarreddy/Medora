@@ -153,16 +153,23 @@ class PatientCard extends StatelessWidget {
         children: [
           BiTitle(r.patientLabel),
           const SizedBox(height: 12),
+          // Empty details are left out, never shown blank or as "none".
           Rows([
-            (r.nameLabel, Text(view.name, style: value)),
-            (
-              '${r.age} / ${r.gender}',
-              Text(
-                '${view.age ?? ''} / ${r.genderName(view.gender)}',
-                style: value,
+            if (view.name.isNotEmpty)
+              (r.nameLabel, Text(view.name, style: value)),
+            if (view.age != null || view.gender.isNotEmpty)
+              (
+                '${r.age} / ${r.gender}',
+                Text(
+                  [
+                    if (view.age != null) '${view.age}',
+                    if (view.gender.isNotEmpty) r.genderName(view.gender),
+                  ].join(' / '),
+                  style: value,
+                ),
               ),
-            ),
-            (r.phone, Text(view.phone, style: value)),
+            if (view.phone.isNotEmpty)
+              (r.phone, Text(view.phone, style: value)),
           ]),
         ],
       ),
@@ -439,8 +446,8 @@ class Tag extends StatelessWidget {
   );
 }
 
-/// Possible conditions in plain words, with one sentence about each; never
-/// a percentage on the patient's report.
+/// Possible conditions in plain words, with one sentence about each and
+/// the AI's estimate in per cent (the user's choice of 2026-10-29).
 class ConditionsCard extends StatelessWidget {
   const ConditionsCard({super.key, required this.conditions});
 
@@ -464,7 +471,7 @@ class ConditionsCard extends StatelessWidget {
               children: [
                 Expanded(child: BiText(c.name, style: text.titleMedium)),
                 const SizedBox(width: 10),
-                LikelihoodChip(c.likelihood),
+                LikelihoodChip(c.likelihood, percent: c.probability),
               ],
             ),
             if (c.about case final about?) ...[
@@ -482,9 +489,12 @@ class ConditionsCard extends StatelessWidget {
 }
 
 class LikelihoodChip extends StatelessWidget {
-  const LikelihoodChip(this.likelihood, {super.key});
+  const LikelihoodChip(this.likelihood, {super.key, this.percent});
 
   final String likelihood;
+
+  /// Shown beside the words, e.g. "More likely · 60%".
+  final int? percent;
 
   @override
   Widget build(BuildContext context) {
@@ -505,7 +515,11 @@ class LikelihoodChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
       ),
       child: Text(
-        ReportLanguage.stringsOf(context).likelihood(likelihood),
+        [
+          ReportLanguage.stringsOf(context).likelihood(likelihood),
+          if (percent != null) '$percent%',
+        ].join(' · '),
+        key: const Key('condition-likelihood'),
         style: style,
       ),
     );

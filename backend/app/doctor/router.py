@@ -384,7 +384,9 @@ async def finalize(session_id: str, body: Draft, me: Doctor, db: Db, request: Re
     source = {
         "summary": "Your doctor's diagnosis: " + ", ".join(d.name for d in body.diagnosis) + ".",
         "clinicalSummary": "",
-        "possibleConditions": [{"name": d.name, "likelihood": "high"} for d in body.diagnosis],
+        # The doctor's diagnosis: no AI percentage on it.
+        "possibleConditions": [{"name": d.name, "likelihood": "high", "probability": None} for d in body.diagnosis],
+        "doctorDiagnosis": True,
         "medicines": [
             {
                 "name": m.name,
@@ -443,6 +445,32 @@ async def finalize(session_id: str, body: Draft, me: Doctor, db: Db, request: Re
     # what a hospital's doctors do.
     db.commit()
     return _review_out(review)
+
+
+@router.get("/suggest")
+async def suggest(
+    request: Request,
+    user: Doctor,
+    kind: Annotated[str, Query(pattern="^(medicine|diagnosis|test)$")],
+    q: Annotated[str, Query(max_length=80)] = "",
+) -> list[dict]:
+    """Type-ahead for the consultation: medicines (usual strength, form and
+    route; brand names lead to the generic), diagnoses and tests. Fills in
+    fields only; the doctor still sets the dose and how often."""
+    from . import catalogue
+
+    if len(q.strip()) < 2:
+        return []
+    state = request.app.state
+    if kind == "medicine":
+        retriever = getattr(state, "retriever", None)
+        extra = retriever.drug_names() if retriever is not None else []
+        return catalogue.medicines(q, extra)
+    if kind == "diagnosis":
+        kb = getattr(state, "kb", None)
+        extra = kb.disease_names() if kb is not None and hasattr(kb, "disease_names") else []
+        return catalogue.names(q, catalogue.DIAGNOSES, extra)
+    return catalogue.names(q, catalogue.TESTS)
 
 
 @router.get("/consultations")

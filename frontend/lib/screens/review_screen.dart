@@ -11,15 +11,65 @@ import '../state/intake_controller.dart';
 import '../theme/medora_theme.dart';
 import '../widgets/intake_form.dart';
 import '../widgets/visited_before.dart';
+import '../widgets/band_panel.dart';
 import '../widgets/medora_scaffold.dart';
 import '../widgets/vitals_grid.dart';
 
 /// Shows everything collected so the patient can correct it before analysis.
-class ReviewScreen extends ConsumerWidget {
+/// Vitals are a must: when none were taken (the band failed, or the voice
+/// agent moved on without them), the band is offered here and the visit
+/// cannot be confirmed until it has measured.
+class ReviewScreen extends ConsumerStatefulWidget {
   const ReviewScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ReviewScreen> createState() => _ReviewScreenState();
+}
+
+class _ReviewScreenState extends ConsumerState<ReviewScreen> {
+  /// True while the band panel is up here. It stays up until the
+  /// measurement has finished, even though readings arrive one by one.
+  late bool _measuring = _vitalsMissing();
+
+  /// A kiosk with a working band whose visit has no vitals yet (and was
+  /// not told they are not needed).
+  bool _vitalsMissing() {
+    final session = ref.read(intakeProvider);
+    return ref.read(kioskConfigProvider).smartBand &&
+        ref.read(bandServiceProvider).isAvailable &&
+        session.vitalsNotNeeded == null &&
+        !session.vitals.hasAny;
+  }
+
+  Future<void> _confirm(PatientIntake patient, S s) async {
+    ref.read(intakeProvider.notifier).setPatient(patient);
+    if (_measuring || _vitalsMissing()) {
+      setState(() => _measuring = true);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(s.vitalsFirst)));
+      return;
+    }
+    try {
+      final id = await ref
+          .read(kioskApiProvider)
+          .createSession(
+            ref.read(intakeProvider),
+            ref.read(languageProvider).code,
+          );
+      ref.read(intakeProvider.notifier).setSessionId(id);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${s.notSaved} ${e.message}')));
+      return;
+    }
+    if (mounted) context.go('/kiosk/report');
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final s = S.of(context);
     final session = ref.watch(intakeProvider);
@@ -53,11 +103,28 @@ class ReviewScreen extends ConsumerWidget {
               color: MedoraColors.teal,
             ),
             const SizedBox(height: 20),
+          ] else if (_measuring) ...[
+            // Taken here: the measurement on the earlier screen did not
+            // happen or did not work.
+            MedoraNotice(
+              icon: Icons.monitor_heart_outlined,
+              message: s.vitalsNeededHere,
+            ),
+            const SizedBox(height: 16),
+            BandPanel(
+              key: const Key('review-band'),
+              onFinished: (_) {
+                if (mounted) setState(() => _measuring = false);
+              },
+              // Only offered when this kiosk has no usable band at all.
+              onSkip: () => setState(() => _measuring = false),
+            ),
+            const SizedBox(height: 20),
           ] else if (band && !session.vitals.hasAny) ...[
             MedoraNotice(icon: Icons.watch_off, message: s.vitalsNotCaptured),
             const SizedBox(height: 20),
           ],
-          if (band && !skipped) ...[
+          if (band && !skipped && !_measuring) ...[
             VitalsGrid(
               signs: ref.watch(bandServiceProvider).measures,
               vitals: session.vitals,
@@ -66,38 +133,18 @@ class ReviewScreen extends ConsumerWidget {
             const SizedBox(height: 20),
           ],
           // A phone-filled visit was reviewed on the phone: saved at once,
-          // so nobody has to touch the kiosk.
+          // so nobody has to touch the kiosk (after the vitals, if they
+          // still had to be taken here).
           if (session.mode == IntakeMode.phone) ...[
-            const _SaveFromPhone(),
+            if (!_measuring) const _SaveFromPhone(),
           ] else ...[
-            VisitedBefore(
-              phone: session.patient.phone,
-              find: ref.read(kioskApiProvider).findPatients,
-            ),
+            VisitedBefore(find: ref.read(kioskApiProvider).findPatients),
             const SizedBox(height: 20),
             IntakeForm(
               initial: session.patient,
               flagMissing: true,
               submitLabel: s.confirmAndReport,
-              onSubmit: (patient) async {
-                ref.read(intakeProvider.notifier).setPatient(patient);
-                try {
-                  final id = await ref
-                      .read(kioskApiProvider)
-                      .createSession(
-                        ref.read(intakeProvider),
-                        ref.read(languageProvider).code,
-                      );
-                  ref.read(intakeProvider.notifier).setSessionId(id);
-                } on ApiException catch (e) {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${s.notSaved} ${e.message}')),
-                  );
-                  return;
-                }
-                if (context.mounted) context.go('/kiosk/report');
-              },
+              onSubmit: (patient) => _confirm(patient, s),
             ),
           ],
         ],

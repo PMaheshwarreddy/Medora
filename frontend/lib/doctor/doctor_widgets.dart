@@ -273,10 +273,15 @@ class VitalTile extends StatelessWidget {
               const SizedBox(width: 4),
               Flexible(
                 child: Text(
-                  [
-                    if (status.isNotEmpty) status,
-                    if (normal.isNotEmpty) 'normal $normal',
-                  ].join(' · '),
+                  // "High · normal 60–100 bpm", or "In range 95–100%".
+                  off
+                      ? [
+                          status[0].toUpperCase() + status.substring(1),
+                          if (normal.isNotEmpty) 'normal $normal',
+                        ].join(' · ')
+                      : normal.isNotEmpty
+                      ? 'In range $normal'
+                      : (status.isEmpty ? '' : 'Normal'),
                   maxLines: 2,
                   style: text.bodySmall?.copyWith(color: color),
                 ),

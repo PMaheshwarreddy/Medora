@@ -163,20 +163,22 @@ def phone_submit(code: str, body: PhoneIntake, db: Db, request: Request) -> None
     _save(db, handoff)
 
 
-class PhoneLookup(ApiModel):
-    phone: str = Field(min_length=7, max_length=32)
+class VisitLookup(ApiModel):
+    """An earlier visit number (printed on the report), e.g. "AB12CD"."""
+
+    visit: str = Field(min_length=6, max_length=40)
 
 
 @router.post("/{code}/phone/patients")
-def phone_lookup(code: str, body: PhoneLookup, db: Db, request: Request) -> list[dict]:
-    """"Have you visited before?" from the phone: masked names only. Offline
+def phone_lookup(code: str, body: VisitLookup, db: Db, request: Request) -> list[dict]:
+    """"Have you visited before?" from the phone, by visit number. Offline
     the records cannot be read, so the visit starts a new one (as on the
     kiosk)."""
     handoff = _live(db, request, code)
     if not request.app.state.runtime.online:
         return []
     try:
-        return patients.lookup(db, handoff.tenant_id, body.phone)
+        return patients.lookup_visit(db, handoff.tenant_id, body.visit)
     except UNREACHABLE:
         db.rollback()
         return []

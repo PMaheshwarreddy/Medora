@@ -117,6 +117,7 @@ class PatientIntake {
     duration: j['duration'] as String? ?? '',
     medications: j['medications'] as String? ?? '',
     allergies: j['allergies'] as String? ?? '',
+    pregnancy: j['pregnancy'] as String? ?? '',
     conditions: j['chronicConditions'] as String? ?? '',
     regularMedicines: j['regularMedicines'] as String? ?? '',
     surgeries: j['pastSurgeries'] as String? ?? '',
@@ -142,6 +143,25 @@ class PatientIntake {
     habits: fields['habits'] as String?,
     weightKg: (fields['weight_kg'] as num?)?.toDouble(),
   );
+
+  /// What is known so far, as the voice agent names the fields (the
+  /// conversation restarted, e.g. after a reload, carries on from these).
+  Map<String, dynamic> toVoiceFields() => {
+    if (name.isNotEmpty) 'name': name,
+    'age': ?age,
+    if (gender != null) 'gender': gender!.name,
+    if (phone.isNotEmpty) 'phone': phone,
+    if (email.isNotEmpty) 'email': email,
+    if (symptoms.isNotEmpty) 'symptoms': symptoms,
+    if (duration.isNotEmpty) 'duration': duration,
+    if (medications.isNotEmpty) 'medications': medications,
+    if (allergies.isNotEmpty) 'allergies': allergies,
+    if (pregnancy.isNotEmpty) 'pregnancy': pregnancy,
+    if (conditions.isNotEmpty) 'chronic_conditions': conditions,
+    if (regularMedicines.isNotEmpty) 'regular_medicines': regularMedicines,
+    if (habits.isNotEmpty) 'habits': habits,
+    'weight_kg': ?weightKg,
+  };
 
   /// Everything the triage step needs before it can run.
   bool get isComplete =>
@@ -176,6 +196,22 @@ class Vitals {
       spo2 != null ||
       temperatureC != null ||
       systolic != null;
+
+  Map<String, dynamic> toJson() => {
+    'heartRate': heartRate,
+    'spo2': spo2,
+    'temperatureC': temperatureC,
+    'systolic': systolic,
+    'diastolic': diastolic,
+  };
+
+  factory Vitals.fromJson(Map<String, dynamic> j) => Vitals(
+    heartRate: (j['heartRate'] as num?)?.toInt(),
+    spo2: (j['spo2'] as num?)?.toInt(),
+    temperatureC: (j['temperatureC'] as num?)?.toDouble(),
+    systolic: (j['systolic'] as num?)?.toInt(),
+    diastolic: (j['diastolic'] as num?)?.toInt(),
+  );
 
   Vitals copyWith({
     int? heartRate,
@@ -229,6 +265,29 @@ class IntakeSession {
     vitals: vitals ?? this.vitals,
     vitalsNotNeeded: vitalsNotNeeded ?? this.vitalsNotNeeded,
     handoffCode: handoffCode ?? this.handoffCode,
+  );
+
+  /// For keeping the visit across a page reload (state/visit_store.dart).
+  Map<String, dynamic> toJson() => {
+    'mode': mode?.name,
+    'patient': patient.toJson(),
+    'vitals': vitals.toJson(),
+    'sessionId': sessionId,
+    'vitalsNotNeeded': vitalsNotNeeded,
+    'handoffCode': handoffCode,
+  };
+
+  factory IntakeSession.fromJson(Map<String, dynamic> j) => IntakeSession(
+    mode: IntakeMode.values.asNameMap()[j['mode']],
+    patient: PatientIntake.fromJson(
+      (j['patient'] as Map?)?.cast<String, dynamic>() ?? const {},
+    ),
+    vitals: Vitals.fromJson(
+      (j['vitals'] as Map?)?.cast<String, dynamic>() ?? const {},
+    ),
+    sessionId: j['sessionId'] as String?,
+    vitalsNotNeeded: j['vitalsNotNeeded'] as String?,
+    handoffCode: j['handoffCode'] as String?,
   );
 }
 
@@ -433,11 +492,16 @@ class ViewCondition {
   ViewCondition.fromJson(Map<String, dynamic> j)
     : name = Bi.fromJson(j['name']) ?? const Bi(''),
       about = Bi.fromJson(j['about']),
-      likelihood = j['likelihood'] as String? ?? 'low';
+      likelihood = j['likelihood'] as String? ?? 'low',
+      probability = (j['probability'] as num?)?.round();
 
   final Bi name;
   final Bi? about;
   final String likelihood;
+
+  /// The AI's estimate in per cent, as the doctor sees it; null on the
+  /// doctor's signed diagnosis and on older reports.
+  final int? probability;
 }
 
 class ViewMedicine {
@@ -556,6 +620,7 @@ class ServiceStatus {
     this.voiceDetail = '',
     this.sms = false,
     this.email = false,
+    this.lanAddress = '',
   });
 
   /// The kiosk cannot reach its own server at all.
@@ -564,14 +629,19 @@ class ServiceStatus {
       voice = false,
       voiceDetail = 'The Medora server cannot be reached.',
       sms = false,
-      email = false;
+      email = false,
+      lanAddress = '';
 
   ServiceStatus.fromJson(Map<String, dynamic> j)
     : online = j['online'] as bool,
       voice = (j['voice'] as Map)['available'] as bool,
       voiceDetail = (j['voice'] as Map)['detail'] as String? ?? '',
       sms = (j['sms'] as Map)['available'] as bool,
-      email = (j['email'] as Map)['available'] as bool;
+      email = (j['email'] as Map)['available'] as bool,
+      lanAddress = j['lanAddress'] as String? ?? '';
+
+  /// The server's address on the local network, for QR codes phones scan.
+  final String lanAddress;
 
   /// False when the server has no internet and runs in offline mode.
   final bool online;

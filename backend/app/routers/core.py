@@ -19,6 +19,45 @@ def health(db: Db) -> dict:
     return {"api": "ok", "database": database}
 
 
+def lan_address() -> str:
+    """This machine's address on the local network, worked out fresh each
+    time (a laptop's Wi-Fi address can change). A UDP "connect" sends
+    nothing; it only asks the system which address it would use. Without a
+    route (offline), the first private address of a network card."""
+    import ipaddress
+    import socket
+
+    def private(ip: str) -> bool:
+        try:
+            a = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        # 172.17.x is Docker's bridge, never the Wi-Fi.
+        return a.version == 4 and a.is_private and not a.is_loopback and not ip.startswith("172.17.")
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("192.0.2.1", 9))  # a documentation address: nothing is sent
+            ip = s.getsockname()[0]
+            if private(ip):
+                return ip
+    except OSError:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            if private(info[4][0]):
+                return info[4][0]
+    except OSError:
+        pass
+    try:  # Linux, no route at all: the addresses of the network cards
+        import subprocess
+
+        out = subprocess.run(["hostname", "-I"], capture_output=True, text=True, timeout=2).stdout
+        return next((ip for ip in out.split() if private(ip)), "")
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
 @router.get("/status", response_model=Status)
 def status(request: Request, db: Db, settings: AppSettings):
     state = request.app.state
@@ -44,6 +83,7 @@ def status(request: Request, db: Db, settings: AppSettings):
         else Capability(available=False, detail="No knowledge data has been ingested"),
         sms=delivery_capability(delivery.sms_configured(settings)),
         email=delivery_capability(delivery.email_configured(settings)),
+        lan_address=lan_address(),
     )
 
 

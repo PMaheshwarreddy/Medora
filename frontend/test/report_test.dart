@@ -107,7 +107,7 @@ const report = {
     },
     'symptoms': {'en': 'fever, cough', 'ml': 'പനി, ചുമ'},
     'duration': {'en': 'two days', 'ml': 'രണ്ട് ദിവസം'},
-    'medicationsTaken': {'en': 'none', 'ml': 'ഒന്നുമില്ല'},
+    'medicationsTaken': null,
     'allergies': {'en': 'penicillin', 'ml': 'penicillin'},
     'conditions': [
       {
@@ -117,6 +117,7 @@ const report = {
           'ml': 'ഒരു വൈറസ് മൂലമുള്ള സാധാരണ അസുഖം.',
         },
         'likelihood': 'high',
+        'probability': 60,
       },
     ],
     'medicines': [
@@ -271,9 +272,10 @@ void main() {
     expect(find.text('Normal: 60–100 bpm'), findsOneWidget);
     expect(find.text('You have a fever.'), findsOneWidget);
     expect(find.text('Flu'), findsOneWidget);
-    expect(find.text('More likely'), findsOneWidget);
-    // Never a percentage on the patient's report.
-    expect(find.textContaining('%'), findsNothing);
+    // The likelihood with the AI's estimate (the user's choice of 2026-10-29).
+    expect(find.text('More likely · 60%'), findsOneWidget);
+    // A "none" answer is not shown as a line of its own.
+    expect(find.text('none'), findsNothing);
     // Medicines: name and strength, form, how to take it.
     expect(find.text('Paracetamol 500 mg'), findsOneWidget);
     expect(find.text('tablet'), findsOneWidget);

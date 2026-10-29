@@ -24,27 +24,30 @@ class VitalsCheck(ApiModel):
 
 @intake_router.post("/vitals-check")
 async def vitals_check(body: VitalsCheck, request: Request, tenant: Kiosk) -> dict:
-    """Whether this complaint calls for vitals. Offline the answer is always
-    yes: only the hosted model may waive a measurement."""
+    """Whether this complaint calls for vitals. Always yes while
+    `vitals_always` is on (the default: vitals at every visit), and offline:
+    only the hosted model may waive a measurement."""
     state = request.app.state
-    if not state.runtime.online:
+    if state.settings.vitals_always or not state.runtime.online:
         return {"needed": True, "reason": ""}
     needed, reason = await vitals_needed(state.llm, body.symptoms, body.age, body.duration, body.language)
     return {"needed": needed, "reason": reason}
 
 
-class PhoneLookup(ApiModel):
-    phone: str = Field(min_length=7, max_length=32)
+class VisitLookup(ApiModel):
+    """An earlier visit number (printed on the report), e.g. "AB12CD"."""
+
+    visit: str = Field(min_length=6, max_length=40)
 
 
 @intake_router.post("/patients")
-def find_patients(body: PhoneLookup, db: Db, tenant: Kiosk, request: Request) -> list[dict]:
-    """The people this hospital knows under a phone number, as masked names
-    and ages, for "Have you visited before?". Nothing else about them."""
+def find_patients(body: VisitLookup, db: Db, tenant: Kiosk, request: Request) -> list[dict]:
+    """"Have you visited before?": the person an earlier visit number
+    belongs to, by name and age, to pick. Nothing else about them."""
     if not request.app.state.runtime.online:
         return []
     try:
-        return patients.lookup(db, tenant.id, body.phone)
+        return patients.lookup_visit(db, tenant.id, body.visit)
     except UNREACHABLE:
         return []
 

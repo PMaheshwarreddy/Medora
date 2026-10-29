@@ -129,24 +129,27 @@ class _DoctorScreenState extends ConsumerState<DoctorScreen> {
         : _tab == 0
         ? QueuePage(api: doctorApi, onOpen: (id) => setState(() => _visit = id))
         : ConsultationsPage(api: doctorApi);
-    final body = SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(28, 26, 28, 48),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1320),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_visit == null) ...[
-                _Greeting(name: api.user['name'] as String? ?? ''),
-                const SizedBox(height: 22),
-              ],
-              content,
-            ],
-          ),
-        ),
-      ),
-    );
+    // A consultation scrolls on its own, with its sign bar fixed below.
+    final body = _visit != null
+        ? content
+        : SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(28, 26, 28, 48),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1320),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_visit == null) ...[
+                      _Greeting(name: api.user['name'] as String? ?? ''),
+                      const SizedBox(height: 22),
+                    ],
+                    content,
+                  ],
+                ),
+              ),
+            ),
+          );
     final hospitalName = api.hospital['name'] as String? ?? '';
     void go(int tab) => setState(() {
       _tab = tab;

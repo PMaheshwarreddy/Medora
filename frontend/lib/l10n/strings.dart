@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../band/band_service.dart';
+import '../state/visit_store.dart';
 
 /// The languages the patient kiosk speaks. The back office stays English.
 enum AppLanguage {
@@ -20,12 +21,23 @@ enum AppLanguage {
 /// The kiosk's language for the current patient. Back to English when a
 /// visit ends, so the next patient starts from the default.
 class LanguageController extends Notifier<AppLanguage> {
+  /// The visit's language survives a page reload (state/visit_store.dart).
   @override
-  AppLanguage build() => AppLanguage.english;
+  AppLanguage build() =>
+      AppLanguage.values
+          .where((l) => l.code == readVisitLanguage())
+          .firstOrNull ??
+      AppLanguage.english;
 
-  void set(AppLanguage language) => state = language;
+  void set(AppLanguage language) {
+    state = language;
+    saveVisitLanguage(language.code);
+  }
 
-  void reset() => state = AppLanguage.english;
+  void reset() {
+    state = AppLanguage.english;
+    saveVisitLanguage(null);
+  }
 }
 
 final languageProvider = NotifierProvider<LanguageController, AppLanguage>(
@@ -98,6 +110,7 @@ abstract class S {
   String get offlineFormOnly;
   String get offlineNothing;
   String get howToStart;
+  String get chooseLanguage;
   String get talkTitle;
   String get talkSubtitle;
   String get needsInternet;
@@ -141,6 +154,8 @@ abstract class S {
   String get weightLabel;
   String get visitedTitle;
   String get visitedSubtitle;
+  String get visitNumberLabel;
+  String get visitNumberShort;
   String get findMe;
   String get thisIsMe;
   String get imNew;
@@ -172,6 +187,8 @@ abstract class S {
   String get resume;
   String get paused;
   String get pausedDetail;
+  String get notedSoFar;
+  String get yourProblem;
 
   // --- form -----------------------------------------------------------------
   String get formTitle;
@@ -202,6 +219,7 @@ abstract class S {
   String get enterPhone;
   String get validPhone;
   String get validEmail;
+  String get validName;
   String get selectGender;
   String get describeSymptoms;
 
@@ -233,6 +251,8 @@ abstract class S {
   String get didNotWork;
   String get bandStopped;
   String get startMeasuring;
+  String get vitalsFirst;
+  String get vitalsNeededHere;
   String get measureAgain;
   String get continueWithoutVitals;
 
@@ -411,6 +431,8 @@ class En extends S {
   @override
   String get howToStart => 'HOW WOULD YOU LIKE TO START?';
   @override
+  String get chooseLanguage => 'Choose your language';
+  @override
   String get talkTitle => 'Talk to Dr. Medora';
   @override
   String get talkSubtitle => 'Answer a few questions by voice';
@@ -515,7 +537,12 @@ class En extends S {
   String get visitedTitle => 'Have you visited this hospital before?';
   @override
   String get visitedSubtitle =>
-      'With your phone number we can find your earlier visits for the doctor.';
+      'Type the visit number printed on an earlier report, then pick your name.';
+  @override
+  String get visitNumberLabel => 'Visit number';
+  @override
+  String get visitNumberShort =>
+      'A visit number has 6 letters and numbers, like AB12CD.';
   @override
   String get findMe => 'Find me';
   @override
@@ -524,7 +551,7 @@ class En extends S {
   String get imNew => "I'm new";
   @override
   String get noneFound =>
-      'We did not find anyone with this number. You will be registered as new.';
+      'No visit has this number. You will be registered as new.';
   @override
   String get welcomeBack =>
       'Welcome back. Your doctor will see your earlier visits.';
@@ -581,6 +608,10 @@ class En extends S {
   String get diastolic => 'Blood pressure (lower)';
   @override
   String get pause => 'Pause';
+  @override
+  String get notedSoFar => 'What Dr. Medora has noted';
+  @override
+  String get yourProblem => 'Your problem';
   @override
   String get resume => 'Resume';
   @override
@@ -649,9 +680,11 @@ class En extends S {
   @override
   String get enterPhone => 'Enter a phone number for your report';
   @override
-  String get validPhone => 'Enter a valid number';
+  String get validPhone => 'Enter a 10-digit mobile number';
   @override
-  String get validEmail => 'Enter a valid email';
+  String get validEmail => 'Enter a valid email, like name@gmail.com';
+  @override
+  String get validName => 'Use letters only, no numbers';
   @override
   String get selectGender => 'Select your gender';
   @override
@@ -749,6 +782,11 @@ class En extends S {
   @override
   String get startMeasuring => 'Start measuring';
   @override
+  String get vitalsFirst => 'Please take your vitals with the band first.';
+  @override
+  String get vitalsNeededHere =>
+      'Your vitals are still needed. Put on the band and tap Start measuring.';
+  @override
   String get measureAgain => 'Measure again';
   @override
   String get continueWithoutVitals => 'Continue without vitals';
@@ -795,11 +833,11 @@ class En extends S {
   @override
   String get voiceUnavailable => 'The voice agent is not available.';
   @override
-  String get toldIsSaved => 'What you told Dr. Medora is saved.';
+  String get toldIsSaved => 'Your answers so far are saved.';
   @override
   String get canTypeInstead => 'You can type your details instead.';
   @override
-  String get continueWithWhatITold => 'Continue with what I told you';
+  String get continueWithWhatITold => 'Check my answers';
   @override
   String get endConversation => 'End conversation';
   @override
@@ -842,7 +880,7 @@ class En extends S {
   @override
   String get medicines => 'Medicines';
   @override
-  String get medicinesForDoctor => 'Medicines the doctor may consider';
+  String get medicinesForDoctor => 'Medications the doctor may consider';
   @override
   String get medicinesDoctorOnly =>
       'The doctor decides on these. Do not take, stop or change any medicine '
@@ -1055,6 +1093,8 @@ class Ml extends S {
   @override
   String get howToStart => 'എങ്ങനെ തുടങ്ങണം?';
   @override
+  String get chooseLanguage => 'ഭാഷ തിരഞ്ഞെടുക്കുക';
+  @override
   String get talkTitle => 'ഡോക്ടർ മെഡോറയോട് സംസാരിക്കുക';
   @override
   String get talkSubtitle => 'ശബ്ദത്തിലൂടെ കുറച്ച് ചോദ്യങ്ങൾക്ക് മറുപടി നൽകുക';
@@ -1161,7 +1201,12 @@ class Ml extends S {
   String get visitedTitle => 'മുമ്പ് ഈ ആശുപത്രിയിൽ വന്നിട്ടുണ്ടോ?';
   @override
   String get visitedSubtitle =>
-      'ഫോൺ നമ്പർ ഉപയോഗിച്ച് നിങ്ങളുടെ മുൻ സന്ദർശനങ്ങൾ ഡോക്ടർക്കായി കണ്ടെത്താം.';
+      'മുമ്പത്തെ റിപ്പോർട്ടിലുള്ള സന്ദർശന നമ്പർ നൽകി, നിങ്ങളുടെ പേര് തിരഞ്ഞെടുക്കുക.';
+  @override
+  String get visitNumberLabel => 'സന്ദർശന നമ്പർ';
+  @override
+  String get visitNumberShort =>
+      'സന്ദർശന നമ്പറിൽ 6 അക്ഷരങ്ങളും അക്കങ്ങളും ഉണ്ട്, ഉദാ. AB12CD.';
   @override
   String get findMe => 'എന്നെ കണ്ടെത്തുക';
   @override
@@ -1170,7 +1215,7 @@ class Ml extends S {
   String get imNew => 'ഞാൻ പുതിയ ആളാണ്';
   @override
   String get noneFound =>
-      'ഈ നമ്പറിൽ ആരെയും കണ്ടെത്തിയില്ല. പുതിയ ആളായി രജിസ്റ്റർ ചെയ്യും.';
+      'ഈ നമ്പറിൽ ഒരു സന്ദർശനവും ഇല്ല. പുതിയ ആളായി രജിസ്റ്റർ ചെയ്യും.';
   @override
   String get welcomeBack =>
       'വീണ്ടും സ്വാഗതം. നിങ്ങളുടെ മുൻ സന്ദർശനങ്ങൾ ഡോക്ടർ കാണും.';
@@ -1227,6 +1272,10 @@ class Ml extends S {
   String get diastolic => 'രക്തസമ്മർദ്ദം (താഴത്തെ)';
   @override
   String get pause => 'നിർത്തിവയ്ക്കുക';
+  @override
+  String get notedSoFar => 'ഡോക്ടർ മെഡോറ രേഖപ്പെടുത്തിയത്';
+  @override
+  String get yourProblem => 'നിങ്ങളുടെ പ്രശ്നം';
   @override
   String get resume => 'തുടരുക';
   @override
@@ -1295,9 +1344,11 @@ class Ml extends S {
   @override
   String get enterPhone => 'റിപ്പോർട്ടിനായി ഫോൺ നമ്പർ നൽകുക';
   @override
-  String get validPhone => 'ശരിയായ നമ്പർ നൽകുക';
+  String get validPhone => '10 അക്ക മൊബൈൽ നമ്പർ നൽകുക';
   @override
-  String get validEmail => 'ശരിയായ ഇമെയിൽ നൽകുക';
+  String get validEmail => 'ശരിയായ ഇമെയിൽ നൽകുക, ഉദാ. name@gmail.com';
+  @override
+  String get validName => 'അക്ഷരങ്ങൾ മാത്രം, അക്കങ്ങൾ പാടില്ല';
   @override
   String get selectGender => 'ലിംഗം തിരഞ്ഞെടുക്കുക';
   @override
@@ -1394,6 +1445,11 @@ class Ml extends S {
   @override
   String get startMeasuring => 'അളക്കാൻ തുടങ്ങുക';
   @override
+  String get vitalsFirst => 'ആദ്യം ബാൻഡ് ഉപയോഗിച്ച് പരിശോധന നടത്തുക.';
+  @override
+  String get vitalsNeededHere =>
+      'നിങ്ങളുടെ പരിശോധന ഇനിയും നടത്തണം. ബാൻഡ് ധരിച്ച് "അളക്കാൻ തുടങ്ങുക" അമർത്തുക.';
+  @override
   String get measureAgain => 'വീണ്ടും അളക്കുക';
   @override
   String get continueWithoutVitals => 'പരിശോധന ഇല്ലാതെ തുടരുക';
@@ -1488,11 +1544,11 @@ class Ml extends S {
   @override
   String get voiceUnavailable => 'ശബ്ദ സഹായി ഇപ്പോൾ ലഭ്യമല്ല.';
   @override
-  String get toldIsSaved => 'നിങ്ങൾ പറഞ്ഞ വിവരങ്ങൾ സേവ് ചെയ്തിട്ടുണ്ട്.';
+  String get toldIsSaved => 'ഇതുവരെ പറഞ്ഞ ഉത്തരങ്ങൾ സേവ് ചെയ്തിട്ടുണ്ട്.';
   @override
   String get canTypeInstead => 'പകരം വിവരങ്ങൾ ടൈപ്പ് ചെയ്യാം.';
   @override
-  String get continueWithWhatITold => 'പറഞ്ഞ വിവരങ്ങളുമായി തുടരുക';
+  String get continueWithWhatITold => 'എന്റെ ഉത്തരങ്ങൾ പരിശോധിക്കുക';
   @override
   String get endConversation => 'സംഭാഷണം അവസാനിപ്പിക്കുക';
   @override

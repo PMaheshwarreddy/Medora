@@ -359,4 +359,89 @@ void main() {
     );
     expect(link.sentJson.last['heartRate'], 72);
   });
+
+  test(
+    'Malayalam chosen first: the conversation starts in Malayalam',
+    () async {
+      link = FakeLink();
+      audio = FakeAudio();
+      final c = ProviderContainer(
+        overrides: [
+          voiceLinkFactoryProvider.overrideWithValue(() => link),
+          audioIoProvider.overrideWithValue(audio),
+        ],
+      );
+      addTearDown(c.dispose);
+      c.read(languageProvider.notifier).set(AppLanguage.malayalam);
+      c.read(intakeProvider.notifier).start(IntakeMode.voice);
+      c.listen(voiceControllerProvider, (_, _) {});
+      c.read(voiceControllerProvider.notifier).start();
+      expect(link.sentJson.single, {
+        'type': 'start',
+        'smartBand': true,
+        'language': 'ml',
+      });
+    },
+  );
+
+  test(
+    'after a reload mid-visit Dr. Medora carries on, band not shown again',
+    () async {
+      link = FakeLink();
+      audio = FakeAudio();
+      final c = ProviderContainer(
+        overrides: [
+          voiceLinkFactoryProvider.overrideWithValue(() => link),
+          audioIoProvider.overrideWithValue(audio),
+        ],
+      );
+      addTearDown(c.dispose);
+      final intake = c.read(intakeProvider.notifier);
+      intake.start(IntakeMode.voice);
+      intake.mergePatient({
+        'age': 34,
+        'gender': 'female',
+        'symptoms': 'fever',
+        'chronic_conditions': 'none',
+      });
+      intake.setVitals(const Vitals(heartRate: 80, spo2: 98));
+      c.listen(voiceControllerProvider, (_, _) {});
+      c.read(voiceControllerProvider.notifier).start();
+      expect(link.sentJson.single, {
+        'type': 'start',
+        'smartBand': true,
+        'language': 'en',
+        'known': {
+          'age': 34,
+          'gender': 'female',
+          'symptoms': 'fever',
+          'chronic_conditions': 'none',
+        },
+        'vitalsTaken': true,
+      });
+    },
+  );
+
+  test('the visit survives a reload as JSON', () {
+    const visit = IntakeSession(
+      mode: IntakeMode.voice,
+      patient: PatientIntake(
+        name: 'Asha Rao',
+        age: 34,
+        gender: Gender.female,
+        symptoms: 'fever',
+        pregnancy: 'no',
+        weightKg: 60,
+      ),
+      vitals: Vitals(heartRate: 80, spo2: 98, temperatureC: 38.2),
+      sessionId: 'abc',
+    );
+    final back = IntakeSession.fromJson(
+      jsonDecode(jsonEncode(visit.toJson())) as Map<String, dynamic>,
+    );
+    expect(back.mode, IntakeMode.voice);
+    expect(back.patient.toJson(), visit.patient.toJson());
+    expect(back.vitals.toJson(), visit.vitals.toJson());
+    expect(back.sessionId, 'abc');
+  });
 }

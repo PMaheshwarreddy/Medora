@@ -1,0 +1,18 @@
+{
+  // VS Code's Run button: the same as frontend/run_dev.sh. Always port 8090
+  // and on the network (0.0.0.0), so the QR codes phones scan keep working;
+  // without these, Flutter picks a new random port on localhost every run.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Medora app (port 8090)",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "frontend",
+      "program": "lib/main.dart",
+      "deviceId": "chrome",
+      "args": ["--web-hostname", "0.0.0.0", "--web-port", "8090", "--no-web-resources-cdn"],
+      "env": { "CHROME_EXECUTABLE": "${workspaceFolder}/frontend/tool/chrome.sh" }
+    }
+  ]
+}

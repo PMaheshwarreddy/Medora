@@ -37,18 +37,23 @@ def _visit(client, kiosk_key, **extra):
     return sid, report
 
 
-def test_returning_patients_are_recognised_by_phone_with_masked_names(client):
+def test_returning_patients_are_found_by_an_earlier_visit_number_with_their_full_name(client):
     tenant_id, key = _hospital(client)
     headers = {"X-Kiosk-Key": key}
     first = client.post("/api/sessions", json={**SESSION, "allergies": "penicillin"}, headers=headers).json()
-    found = client.post("/api/intake/patients", json={"phone": "+91 98765 43210"}, headers=headers).json()
-    assert [(p["label"], p["age"]) for p in found] == [("A*** R***", 34)]
-    # Someone else at the same number is a separate person.
-    client.post("/api/sessions", json={**SESSION, "name": "Ravi Rao", "age": 60}, headers=headers)
-    found = client.post("/api/intake/patients", json={"phone": "9876543210"}, headers=headers).json()
-    assert [p["label"] for p in found] == ["A*** R***", "R*** R***"]
-    # The default client does not see this hospital's patients.
-    assert client.post("/api/intake/patients", json={"phone": "9876543210"}).json() == []
+    number = first["id"][:6].upper()  # the visit number printed on the report
+    found = client.post("/api/intake/patients", json={"visit": number}, headers=headers).json()
+    assert [(p["label"], p["age"]) for p in found] == [("Asha Rao", 34)]
+    # Typed loosely ("ab12-cd") it is the same number.
+    loose = number[:3].lower() + "-" + number[3:].lower()
+    assert client.post("/api/intake/patients", json={"visit": loose}, headers=headers).json() == found
+    # Someone else at the same phone number is a separate person, with their own visit.
+    second = client.post("/api/sessions", json={**SESSION, "name": "Ravi Rao", "age": 60}, headers=headers).json()
+    other = client.post("/api/intake/patients", json={"visit": second["id"][:6]}, headers=headers).json()
+    assert [p["label"] for p in other] == ["Ravi Rao"] and other[0]["id"] != found[0]["id"]
+    # Too short to be a visit number, or another hospital's visit: nothing.
+    assert client.post("/api/intake/patients", json={"visit": number[:4]}, headers=headers).status_code == 422
+    assert client.post("/api/intake/patients", json={"visit": number}).json() == []
 
     # Picking yourself links the visit and merges what you report now.
     again = client.post(
@@ -152,7 +157,7 @@ def test_a_doctor_picks_reviews_and_signs_and_the_patient_gets_the_final_report(
     from app.patients.service import history_text
     from sqlalchemy.orm import Session as DbSession
 
-    patient_id = client.post("/api/intake/patients", json={"phone": "9876543210"}, headers={"X-Kiosk-Key": key}).json()[0]["id"]
+    patient_id = client.post("/api/intake/patients", json={"visit": sid[:6]}, headers={"X-Kiosk-Key": key}).json()[0]["id"]
     sid2, _ = _visit(client, key, patientId=patient_id)
     visit2 = client.get(f"/api/doctor/visits/{sid2}", headers=dr).json()
     assert visit2["history"][0]["diagnosis"] == ["Viral fever"]
@@ -296,7 +301,7 @@ def test_the_phone_hand_off_works_offline_and_the_visit_joins_its_record_later(c
     assert code in state.offline.handoffs
     phone = client.get(f"/api/handoffs/{code}/phone").json()
     assert phone["status"] == "open" and phone["hospital"] == "City Hospital"
-    assert client.post(f"/api/handoffs/{code}/phone/patients", json={"phone": "9876543210"}).json() == []
+    assert client.post(f"/api/handoffs/{code}/phone/patients", json={"visit": "ABCDEF"}).json() == []
     intake = {k: v for k, v in SESSION.items() if k != "mode"} | {"allergies": "sulfa"}
     assert client.post(f"/api/handoffs/{code}/phone", json=intake).status_code == 204
     waiting = client.get(f"/api/handoffs/{code}", headers=kiosk).json()
@@ -316,3 +321,55 @@ def test_the_phone_hand_off_works_offline_and_the_visit_joins_its_record_later(c
         from app.patients.models import Patient
 
         assert "sulfa" in db.get(Patient, again.patient_id).allergies
+
+
+def test_the_patients_copy_shows_the_ai_percentage_and_no_none_lines():
+    from types import SimpleNamespace
+
+    from app.patient_view import plain_view
+
+    session = SimpleNamespace(
+        name="Asha Rao", age=34, gender="female", phone="", symptoms="fever", duration="2 days",
+        medications="none", allergies="No known allergies", language="en",
+    )
+    report = {
+        "summary": "Fever for two days.",
+        "possibleConditions": [{"name": "Viral fever", "likelihood": "high"}, {"name": "Dengue", "likelihood": "low"}],
+        "doctorView": {"conditions": [{"name": "Viral fever", "probability": 70}, {"name": "Dengue", "probability": 10}]},
+    }
+    view = plain_view(report, session)
+    assert [c["probability"] for c in view["conditions"]] == [70, 10]  # the doctor's numbers
+    assert view["medicationsTaken"] is None and view["allergies"] is None
+    # Without the doctor's view, the same rule works them out.
+    report.pop("doctorView")
+    assert all(isinstance(c["probability"], int) for c in plain_view(report, session)["conditions"])
+    # The doctor's signed diagnosis carries no AI percentage.
+    signed = {"possibleConditions": [{"name": "Viral fever", "likelihood": "high"}], "doctorDiagnosis": True}
+    assert plain_view(signed, session)["conditions"][0]["probability"] is None
+
+
+def test_the_doctor_gets_type_ahead_for_medicines_diagnoses_and_tests(client):
+    tenant_id, key = _hospital(client)
+    admin = _admin_of(client, tenant_id)
+    dr = _doctor(client, admin)
+
+    def suggest(kind, q):
+        r = client.get("/api/doctor/suggest", params={"kind": kind, "q": q}, headers=dr)
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    paracetamol = suggest("medicine", "para")
+    assert paracetamol[0] == {
+        "label": "Paracetamol 500 mg tablet", "name": "Paracetamol", "form": "tablet",
+        "strength": "500 mg", "route": "oral", "source": "common",
+    }  # fmt: skip
+    # A brand leads to the generic with its strength.
+    dolo = suggest("medicine", "dolo")[0]
+    assert (dolo["name"], dolo["strength"], dolo["source"]) == ("Paracetamol", "650 mg", "brand")
+    # Short queries do not match inside words ("azi" is not sulfadiazine).
+    assert all(m["name"].startswith("Azithromycin") for m in suggest("medicine", "azi"))
+    assert suggest("diagnosis", "uti")[0]["name"] == "Urinary tract infection"
+    assert suggest("test", "cbc")[0]["name"] == "Complete blood count (CBC)"
+    assert suggest("test", "x") == []  # one letter: nothing yet
+    assert client.get("/api/doctor/suggest", params={"kind": "bogus", "q": "ab"}, headers=dr).status_code == 422
+    assert client.get("/api/doctor/suggest", params={"kind": "test", "q": "cbc"}).status_code == 401

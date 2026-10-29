@@ -79,6 +79,10 @@ class WelcomeScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
         ],
+        // The language first, where the patient looks (the user's request
+        // of 2026-10-29); voice then greets in it too.
+        const _LanguageChoice(),
+        const SizedBox(height: 28),
         Text(
           s.howToStart,
           style: text.bodyMedium?.copyWith(
@@ -252,4 +256,110 @@ class _ModeTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// English or Malayalam, as two large buttons at the front of the welcome
+/// page. The screen, the form, the voice greeting and the report follow it.
+class _LanguageChoice extends ConsumerWidget {
+  const _LanguageChoice();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final text = Theme.of(context).textTheme;
+    final current = ref.watch(languageProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          // Both languages, so either reader finds it.
+          '${S.of(context).chooseLanguage.toUpperCase()}'
+          '${current == AppLanguage.english ? '  ·  ഭാഷ' : '  ·  LANGUAGE'}',
+          style: text.bodyMedium?.copyWith(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.4,
+            fontFamilyFallback: MedoraFonts.fallback,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            for (final (i, language) in AppLanguage.values.indexed) ...[
+              if (i > 0) const SizedBox(width: 12),
+              Expanded(
+                child: _LanguageButton(
+                  key: Key('welcome-language-${language.code}'),
+                  label: language.nativeName,
+                  selected: current == language,
+                  onTap: () =>
+                      ref.read(languageProvider.notifier).set(language),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _LanguageButton extends StatelessWidget {
+  const _LanguageButton({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    label: label,
+    child: Material(
+      color: selected ? MedoraColors.primary : MedoraColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: selected ? MedoraColors.primary : MedoraColors.border,
+          width: 1.5,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                selected ? Icons.check_circle_rounded : Icons.translate_rounded,
+                size: 20,
+                color: selected ? Colors.white : MedoraColors.primary,
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: MedoraFonts.sans,
+                    fontFamilyFallback: MedoraFonts.fallback,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? Colors.white : MedoraColors.text,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }

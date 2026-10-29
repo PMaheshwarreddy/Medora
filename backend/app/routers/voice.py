@@ -9,7 +9,7 @@ from ..auth import user_for_token
 from ..models import Tenant
 from ..tenancy import find_tenant, record
 from ..vitals_need import vitals_needed
-from ..voice import VoiceContext, pick_provider
+from ..voice import VoiceContext, clean_intake, pick_provider
 
 router = APIRouter()
 log = logging.getLogger("medora.voice")
@@ -56,10 +56,15 @@ async def voice(ws: WebSocket, key: str = "", tenant: str = "", admin: str = "")
         return await vitals_needed(state.llm, symptoms, age, language=ctx.language)
 
     language = start.get("language") if start.get("language") in ("auto", "en", "ml") else "en"
+    known = start.get("known")
     ctx = VoiceContext(
         smart_band=bool(start.get("smartBand", True)) and band_allowed,
-        vitals_check=vitals_check,
+        # Vitals at every visit unless the settings bring back the
+        # per-complaint decision.
+        vitals_check=None if state.settings.vitals_always else vitals_check,
         language=language,
+        known=clean_intake(known) if isinstance(known, dict) else {},
+        vitals_taken=bool(start.get("vitalsTaken")),
     )
 
     async def inbound():
@@ -94,7 +99,7 @@ async def voice(ws: WebSocket, key: str = "", tenant: str = "", admin: str = "")
         record(engine, "voice.error", f"{type(e).__name__}: {e}", tenant_id, "error")
         try:
             await ws.send_json(
-                {"type": "error", "message": "The voice agent stopped unexpectedly."}
+                {"type": "error", "message": "The conversation with Dr. Medora stopped."}
             )
         except Exception:
             return

@@ -667,10 +667,13 @@ def test_vitals_are_skipped_only_on_a_clear_no_from_the_hosted_model(client):
     local.name = "ollama:qwen"
     assert asyncio.run(vitals_needed(local, "Knee pain", 30))[0] is True
 
-    # Over the API: offline, the answer is always yes.
+    # Over the API: vitals are a must at every visit by default.
     client.app.state.llm = no
-    client.app.state.runtime.online = False
     body = {"symptoms": "Knee pain", "age": 30}
+    assert client.post("/api/intake/vitals-check", json=body).json()["needed"] is True
+    # With the per-complaint decision switched back on: offline, always yes.
+    client.app.state.settings.vitals_always = False
+    client.app.state.runtime.online = False
     assert client.post("/api/intake/vitals-check", json=body).json()["needed"] is True
     client.app.state.runtime.online = True
     assert client.post("/api/intake/vitals-check", json=body).json() == {
@@ -742,6 +745,32 @@ def test_voice_tools_decide_on_vitals_and_never_measure_twice():
         assert "do not ask again" in again["note"]
         assert (await tools.call("6", "vitals_needed", {}))["needed"] is False
         assert sent.count({"type": "request_vitals"}) == 1 and len(asked) == 1
+
+        # Vitals are a must: finishing before they were taken is refused
+        # (twice at most, then the review screen takes them).
+        tools = IntakeTools(VoiceContext(smart_band=True), emit=lambda item: asyncio.sleep(0))
+        assert (await tools.call("1", "finish_intake", {}))["result"].startswith("Not finished")
+        assert not tools.finishing
+        assert await tools.call("2", "request_vitals", {}) is None
+        assert (await tools.call("3", "finish_intake", {})) == {"result": "ok"}
+        tools = IntakeTools(VoiceContext(smart_band=True), emit=lambda item: asyncio.sleep(0))
+        for i in range(IntakeTools.MAX_FINISH_REFUSALS):
+            assert (await tools.call(str(i), "finish_intake", {}))["result"].startswith("Not finished")
+        assert (await tools.call("9", "finish_intake", {})) == {"result": "ok"}
+
+        # A measurement whose call was dropped (new line to the model)
+        # still reaches the model, as a message.
+        tools = IntakeTools(VoiceContext(smart_band=True), emit=lambda item: asyncio.sleep(0))
+        await tools.call("1", "request_vitals", {})
+        tools.drop_pending()
+        call_id, result = tools.vitals_measured({"captured": True, "heartRate": 80})
+        assert call_id is None and result["result"].startswith("Vitals measured: heart rate")
+        assert tools.vitals_done and tools.vitals_measured({"captured": True}) is None
+
+        # Vitals the kiosk already took (the page was reloaded) are not taken again.
+        tools = IntakeTools(VoiceContext(smart_band=True, vitals_taken=True), emit=lambda item: asyncio.sleep(0))
+        assert "already" in (await tools.call("1", "request_vitals", {}))["result"]
+        assert (await tools.call("2", "finish_intake", {})) == {"result": "ok"}
 
         # A kiosk without a band never mentions vitals.
         tools = IntakeTools(VoiceContext(smart_band=False), emit=lambda item: asyncio.sleep(0))
@@ -966,3 +995,11 @@ def test_allergies_and_the_pregnancy_answer_reach_the_report_rules(client):
     assert "allergic to any medicine or injection" in rules
     assert "PREGNANCY, ONLY WHEN IT MATTERS" in rules
 
+
+
+def test_status_gives_the_servers_network_address_for_qr_codes(client):
+    import ipaddress
+
+    address = client.get("/api/status").json()["lanAddress"]
+    # A private IPv4 address, or empty on a machine with no network card.
+    assert address == "" or ipaddress.ip_address(address).is_private

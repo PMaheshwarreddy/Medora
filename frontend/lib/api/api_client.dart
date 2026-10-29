@@ -24,16 +24,57 @@ String _sameHost() {
 
 /// Where patients' phones reach this app, for the QR codes the kiosk shows
 /// (`--dart-define=MEDORA_PUBLIC_URL=https://medora.example.com`). Empty =
-/// the address the kiosk itself was opened at, which a phone can only reach
-/// if it is not `localhost`.
+/// the address the kiosk itself was opened at (see [publicBase]).
 const medoraPublicUrl = String.fromEnvironment('MEDORA_PUBLIC_URL');
 
+/// This server's address on the local network, as `/api/status` last
+/// reported it (fresh every few seconds, so a changed Wi-Fi address is
+/// followed). Empty until known.
+String serverLanAddress = '';
+
 /// A page of this app (e.g. `/r/<visit>`) as a link a phone can open.
-Uri publicLink(String route) {
-  final base = medoraPublicUrl.isEmpty
-      ? Uri.base.replace(query: '')
-      : Uri.parse(medoraPublicUrl);
-  return base.replace(fragment: route);
+Uri publicLink(String route) => publicBase(
+  Uri.base,
+  medoraPublicUrl,
+  serverLanAddress,
+).replace(fragment: route);
+
+/// The address phones should use, from where the kiosk was [opened], the
+/// build's [define] (MEDORA_PUBLIC_URL) and the server's [lan] address:
+/// - a real domain in [define] (https://medora.example.com) always wins;
+/// - a kiosk opened as localhost uses the server's current network address
+///   with the port the app is served on (a phone cannot reach "localhost",
+///   and an address baked in at start goes stale when the Wi-Fi changes);
+/// - else [define], else the kiosk's own address.
+Uri publicBase(Uri opened, String define, String lan) {
+  final defined = define.isEmpty ? null : Uri.tryParse(define);
+  bool isIp(String host) =>
+      RegExp(r'^\d{1,3}(\.\d{1,3}){3}$').hasMatch(host) || host.contains(':');
+  if (defined != null &&
+      defined.host.isNotEmpty &&
+      defined.host != 'localhost' &&
+      !isIp(defined.host)) {
+    return defined;
+  }
+  final local = {'localhost', '127.0.0.1', '::1', ''}.contains(opened.host);
+  if (local && lan.isNotEmpty) {
+    final port = opened.hasPort
+        ? opened.port
+        : (defined != null && defined.hasPort ? defined.port : null);
+    return Uri(
+      scheme: 'http',
+      host: lan,
+      port: port,
+      path: opened.path.isEmpty ? '/' : opened.path,
+    );
+  }
+  if (defined != null) return defined;
+  return Uri(
+    scheme: opened.scheme,
+    host: opened.host,
+    port: opened.hasPort ? opened.port : null,
+    path: opened.path,
+  );
 }
 
 class ApiException implements Exception {
@@ -173,20 +214,22 @@ class ApiClient {
 
   Future<ServiceStatus> status() async {
     final body = await _send(() => _http.get(_uri('/api/status')));
-    return ServiceStatus.fromJson(body as Map<String, dynamic>);
+    final status = ServiceStatus.fromJson(body as Map<String, dynamic>);
+    if (status.lanAddress.isNotEmpty) serverLanAddress = status.lanAddress;
+    return status;
   }
 
-  /// The people this hospital knows under [phone], masked, for "Have you
-  /// visited before?". Empty when offline or on any failure.
+  /// The person an earlier [visit] number belongs to (full name and age),
+  /// for "Have you visited before?". Empty when offline or on any failure.
   Future<List<({String id, String label, int? age})>> findPatients(
-    String phone,
+    String visit,
   ) async {
     try {
       final body = await _send(
         () => _http.post(
           _uri('/api/intake/patients'),
           headers: _headers(json: true),
-          body: jsonEncode({'phone': phone}),
+          body: jsonEncode({'visit': visit}),
         ),
         timeout: const Duration(seconds: 10),
       );
@@ -272,14 +315,14 @@ class ApiClient {
 
   Future<List<({String id, String label, int? age})>> phoneFindPatients(
     String code,
-    String phone,
+    String visit,
   ) async {
     try {
       final body = await _send(
         () => _http.post(
           _uri('/api/handoffs/$code/phone/patients'),
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'phone': phone}),
+          body: jsonEncode({'visit': visit}),
         ),
       );
       return [

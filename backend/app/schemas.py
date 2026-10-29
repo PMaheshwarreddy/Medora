@@ -96,6 +96,10 @@ class Status(ApiModel):
     knowledge_base: Capability
     sms: Capability
     email: Capability
+    # This server's address on the local network (e.g. 192.168.1.20), so a
+    # kiosk opened as localhost can put a phone-reachable address in its QR
+    # codes; empty when it has none.
+    lan_address: str = ""
 
 
 class TenantCreate(ApiModel):

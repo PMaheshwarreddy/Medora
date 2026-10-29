@@ -6,7 +6,8 @@ reviews and rules check, and what the doctor reads. The patient reads
 
   patient details, what they told us (symptoms, since when, medicines
   taken, allergies), vitals, a short summary, possible conditions (a plain
-  name and one sentence about each, never a percentage), medicines (name,
+  name and one sentence about each, with the AI's estimate as a percentage:
+  the user's choice of 2026-10-29, replacing likelihood words only), medicines (name,
   form and strength, how to take it, what it is for, caution), precautions
   and lifestyle advice.
 
@@ -114,6 +115,18 @@ def how_to_take(m: dict) -> str:
     return text.strip()
 
 
+# Answers that mean "nothing to report", in English and Malayalam.
+_NOTHING = {"none", "no", "nil", "nothing", "na", "n/a", "not applicable", "no allergies",
+            "no known allergies", "nkda", "none taken", "no medicine", "no medicines",
+            "ഇല്ല", "ഒന്നുമില്ല", "അലർജി ഇല്ല", "അലർജിയില്ല"}
+
+
+def _said(text: str | None) -> str:
+    """The patient's answer, or "" when it only says there is nothing."""
+    value = (text or "").strip()
+    return "" if value.lower().strip(" .") in _NOTHING else value
+
+
 def _items(report: dict, session) -> list[tuple[tuple, str, str]]:
     """(where it goes, task, source text) for every patient-facing text."""
     out: list[tuple[tuple, str, str]] = []
@@ -125,8 +138,10 @@ def _items(report: dict, session) -> list[tuple[tuple, str, str]]:
     add(("summary",), "simplify", report.get("clinicalSummary") or report.get("summary"))
     add(("symptoms",), "patient_words", session.symptoms)
     add(("duration",), "patient_words", session.duration)
-    add(("medicationsTaken",), "patient_words", session.medications)
-    add(("allergies",), "patient_words", getattr(session, "allergies", "") or "")
+    # A "none" answer is not shown as a line of its own (the user's rule of
+    # 2026-10-29: no "none" on the report); a known allergy always is.
+    add(("medicationsTaken",), "patient_words", _said(session.medications))
+    add(("allergies",), "patient_words", _said(getattr(session, "allergies", "") or ""))
     for i, c in enumerate(report.get("possibleConditions") or []):
         add(("conditions", i, "name"), "condition_name", c.get("name"))
         add(("conditions", i, "about"), "condition_about", c.get("name"))
@@ -151,6 +166,26 @@ def _items(report: dict, session) -> list[tuple[tuple, str, str]]:
     return out
 
 
+def _percents(report: dict) -> list[int | None]:
+    """Each listed condition's percentage, the same number the doctor sees
+    (doctorView), else worked out the same way (triage.with_probabilities)."""
+    from .triage import with_probabilities
+
+    listed = report.get("possibleConditions") or []
+    if report.get("doctorDiagnosis"):
+        return [None] * len(listed)  # the signed report: the doctor's diagnosis
+    doctor = {
+        str(c.get("name", "")).lower(): c.get("probability")
+        for c in (report.get("doctorView") or {}).get("conditions") or []
+    }
+    own = with_probabilities(listed)
+    out = []
+    for c, mine in zip(listed, own):
+        pct = doctor.get(str(c.get("name", "")).lower())
+        out.append(int(pct) if isinstance(pct, (int, float)) else mine.get("probability"))
+    return out
+
+
 def _skeleton(report: dict, session) -> dict:
     """The view's shape, with the structured parts filled in and every text
     still empty."""
@@ -167,8 +202,8 @@ def _skeleton(report: dict, session) -> dict:
         "medicationsTaken": None,
         "allergies": None,
         "conditions": [
-            {"name": None, "about": None, "likelihood": c.get("likelihood", "low")}
-            for c in report.get("possibleConditions") or []
+            {"name": None, "about": None, "likelihood": c.get("likelihood", "low"), "probability": pct}
+            for c, pct in zip(report.get("possibleConditions") or [], _percents(report))
         ],
         "medicines": [
             {

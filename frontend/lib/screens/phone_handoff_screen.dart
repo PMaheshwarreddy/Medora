@@ -10,6 +10,7 @@ import '../l10n/strings.dart';
 import '../models/intake.dart';
 import '../state/intake_controller.dart';
 import '../state/kiosk_context.dart';
+import '../state/service_status.dart';
 import '../theme/medora_theme.dart';
 import '../widgets/medora_scaffold.dart';
 
@@ -111,6 +112,8 @@ class _PhoneHandoffScreenState extends ConsumerState<PhoneHandoffScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // The QR code uses the server's network address: rebuild when it is known.
+    ref.watch(serviceStatusProvider);
     final s = S.of(context);
     final text = Theme.of(context).textTheme;
     final code = _code;

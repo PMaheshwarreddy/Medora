@@ -149,7 +149,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _Header(page: _page),
+                  _Header(
+                    page: _page,
+                    onHome: () => setState(() => _page = AdminPage.dashboard),
+                  ),
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.fromLTRB(28, 4, 28, 28),
@@ -219,36 +222,45 @@ class _Sidebar extends StatelessWidget {
         children: [
           Padding(
             padding: EdgeInsets.only(left: expanded ? 8 : 9, bottom: 26),
-            child: Row(
-              children: [
-                const BrandMark(size: 38),
-                if (expanded) ...[
-                  const SizedBox(width: 12),
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Medora',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          height: 1.1,
-                          fontFamily: MedoraFonts.serif,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                      Text(
-                        'Back office',
-                        style: TextStyle(
-                          color: AdminColors.sidebarText,
-                          fontSize: 12,
-                        ),
+            // The brand is a way home too, as on most sites.
+            child: GestureDetector(
+              key: const Key('admin-brand-home'),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onSelect(AdminPage.dashboard),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: Row(
+                  children: [
+                    const BrandMark(size: 38),
+                    if (expanded) ...[
+                      const SizedBox(width: 12),
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Medora',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              height: 1.1,
+                              fontFamily: MedoraFonts.serif,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          Text(
+                            'Back office',
+                            style: TextStyle(
+                              color: AdminColors.sidebarText,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                ],
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
           Expanded(
@@ -416,9 +428,12 @@ class _NavItem extends StatelessWidget {
 }
 
 class _Header extends ConsumerWidget {
-  const _Header({required this.page});
+  const _Header({required this.page, required this.onHome});
 
   final AdminPage page;
+
+  /// Back to the dashboard, the back office's home.
+  final VoidCallback onHome;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -429,6 +444,16 @@ class _Header extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(28, 22, 28, 18),
       child: Row(
         children: [
+          // Home: back to the dashboard from any page.
+          Padding(
+            padding: const EdgeInsets.only(right: 14),
+            child: IconButton.filledTonal(
+              key: const Key('admin-home'),
+              tooltip: 'Home (dashboard)',
+              onPressed: page == AdminPage.dashboard ? null : onHome,
+              icon: const Icon(Icons.home_rounded),
+            ),
+          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

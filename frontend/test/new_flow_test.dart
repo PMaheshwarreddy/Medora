@@ -127,7 +127,7 @@ void main() {
           'sessionId': sessionId.isEmpty ? null : sessionId,
         }),
         ('POST', '/api/handoffs/abc123code/phone/patients') => json([
-          {'id': 'p1', 'label': 'A*** R***', 'age': 34},
+          {'id': 'p1', 'label': 'Asha Rao', 'age': 34},
         ]),
         ('POST', '/api/handoffs/abc123code/phone') => http.Response('', 204),
         _ => json({'detail': 'Not found'}, 404),
@@ -137,13 +137,20 @@ void main() {
     expect(find.text('City Hospital'), findsOneWidget);
     expect(find.text('Have you visited this hospital before?'), findsOneWidget);
 
-    // A returning patient picks themselves under the number.
-    await tester.enterText(
-      find.byKey(const Key('visited-phone')),
-      '9876543210',
-    );
+    // A returning patient types an earlier visit number and picks
+    // themselves by full name.
+    await tester.enterText(find.byKey(const Key('visited-number')), 'AB1');
+    await tester.tap(find.byKey(const Key('visited-find')));
+    await tester.pump();
+    expect(find.textContaining('6 letters and numbers'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('visited-number')), 'ab12-cd');
     await tester.tap(find.byKey(const Key('visited-find')));
     await tester.pump(const Duration(milliseconds: 100));
+    final lookup = requests.lastWhere(
+      (r) => r.url.path == '/api/handoffs/abc123code/phone/patients',
+    );
+    expect(jsonDecode(lookup.body), {'visit': 'ab12cd'});
+    expect(find.text('Asha Rao, 34'), findsOneWidget);
     await tester.tap(find.byKey(const Key('visited-p1')));
     await tester.pump();
     expect(find.textContaining('Welcome back'), findsOneWidget);
@@ -389,6 +396,25 @@ void main() {
           ('POST', '/api/doctor/visits/v1/finalize') => json({
             'status': 'final',
           }),
+          ('GET', '/api/doctor/suggest') => json(
+            switch (r.url.queryParameters['kind']) {
+              'medicine' => [
+                {
+                  'label': 'Dolo 650 · Paracetamol 650 mg tablet',
+                  'name': 'Paracetamol',
+                  'form': 'tablet',
+                  'strength': '650 mg',
+                  'route': 'oral',
+                  'source': 'brand',
+                },
+              ],
+              'diagnosis' => [
+                {'label': 'Viral fever', 'name': 'Viral fever'},
+                {'label': 'Viral pneumonia', 'name': 'Viral pneumonia'},
+              ],
+              _ => [],
+            },
+          ),
           _ => json({'detail': 'Not found'}, 404),
         };
       }),
@@ -423,23 +449,57 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
+    // One column of rows, each showing its gist; the allergy stands out.
+    expect(find.byKey(const Key('fold-details')), findsOneWidget);
+    expect(find.text('penicillin'), findsOneWidget);
+    expect(find.textContaining('Viral fever 62%'), findsOneWidget);
+    expect(find.text('62%'), findsNothing); // closed until tapped
     // Medora's doctor report: AI percentages, and the doubted condition with why.
+    await tester.tap(find.byKey(const Key('fold-assessment')));
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('62%'), findsOneWidget);
     expect(
       find.textContaining('Doubted by Medora\'s check: Fever for only 2 days.'),
       findsOneWidget,
     );
-    expect(find.text('penicillin'), findsOneWidget);
-    // where each suggestion came from: the dose check and the guideline passages
-    expect(find.text('Dose in [S1] NFI 2011, page 45'), findsOneWidget);
-    expect(find.byKey(const ValueKey('guideline-sources')), findsOneWidget);
-    expect(find.text('National Formulary of India, page 45'), findsOneWidget);
-    expect(find.text('Testing only'), findsOneWidget);
+    // The dose check stays; the guideline passages are no longer shown.
+    expect(find.text('Dose in NFI 2011, page 45'), findsOneWidget);
+    expect(find.byKey(const ValueKey('guideline-sources')), findsNothing);
+    expect(find.text('Testing only'), findsNothing);
     expect(find.text('Medora suggested'), findsOneWidget);
 
-    await tester.tap(find.text('Add').first);
+    // Nothing to sign without a diagnosis.
+    FilledButton sign() =>
+        tester.widget<FilledButton>(find.byKey(const Key('finalize')));
+    expect(sign().onPressed, isNull);
+    expect(find.text('Add a diagnosis'), findsOneWidget);
+
+    // The diagnosis is searched like a search box.
+    await tester.enterText(find.byKey(const Key('diagnosis-input')), 'vir');
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Viral pneumonia'), findsOneWidget);
+    await tester.tap(find.text('Viral fever').last);
     await tester.pump();
     expect(find.widgetWithText(InputChip, 'Viral fever'), findsOneWidget);
+    expect(sign().onPressed, isNotNull);
+
+    // A brand name finds the medicine and fills in its strength and form.
+    await tester.ensureVisible(find.byKey(const Key('add-medicine')));
+    await tester.tap(find.byKey(const Key('add-medicine')));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('med-name-1')), 'dolo');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Dolo 650 · Paracetamol 650 mg tablet'));
+    await tester.pump();
+    expect(find.widgetWithText(TextField, '650 mg'), findsOneWidget);
+    // Without a dose and how often it cannot be signed.
+    expect(find.text('Paracetamol: dose'), findsOneWidget);
+    expect(sign().onPressed, isNull);
+    // (the second medicine card's Remove; advice lines have one too)
+    await tester.tap(find.byTooltip('Remove').at(1));
+    await tester.pump();
+    expect(sign().onPressed, isNotNull);
+
     // The signed report is in English unless the doctor switches it.
     await tester.ensureVisible(find.byKey(const Key('report-language-ml')));
     await tester.tap(find.byKey(const Key('report-language-ml')));

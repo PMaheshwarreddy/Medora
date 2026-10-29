@@ -620,6 +620,13 @@ void main() {
     await openPage(tester, 'logs');
     expect(find.text('report.error'), findsOneWidget);
     expect(find.text('System'), findsWidgets);
+
+    // Home goes back to the dashboard from any page.
+    await tester.tap(find.byKey(const Key('admin-home')));
+    await tester.pumpAndSettle();
+    expect(find.text('report.error'), findsNothing);
+    final home = tester.widget<IconButton>(find.byKey(const Key('admin-home')));
+    expect(home.onPressed, isNull); // already home
   });
 
   testWidgets('database: review a run, approve it, then load it', (

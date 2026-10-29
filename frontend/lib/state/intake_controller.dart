@@ -1,10 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/intake.dart';
+import 'visit_store.dart';
 
 class IntakeController extends Notifier<IntakeSession> {
   @override
-  IntakeSession build() => const IntakeSession();
+  IntakeSession build() {
+    // Every change is kept for a page reload; reset() clears it.
+    listenSelf((_, next) => saveVisit(next));
+    return readVisit() ?? const IntakeSession();
+  }
 
   void start(IntakeMode mode) => state = IntakeSession(mode: mode);
 

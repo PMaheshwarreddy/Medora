@@ -445,6 +445,29 @@ class Retriever:
         )
         return [dict(zip(("kind", "body", "page", "source", "tier"), r)) for r in rows]
 
+    def drug_names(self) -> list[str]:
+        """Every medicine name in the guideline database, loaded once (for
+        the doctor's type-ahead); empty while the database is unreachable."""
+        cached = getattr(self, "_drug_names", None)
+        if cached is not None:
+            return cached
+        # Loaded in the background so a doctor's typing never waits on a
+        # slow or unreachable database; the list joins once it is in.
+        if not getattr(self, "_drug_names_loading", False) and time.monotonic() >= self._down_until:
+            self._drug_names_loading = True
+
+            def load() -> None:
+                try:
+                    rows = self._query("select distinct name from kb_drugs where name is not null")
+                    self._drug_names = sorted({str(r[0]).strip() for r in rows if r[0] and len(str(r[0])) <= 80})
+                except Exception:  # noqa: BLE001 - suggestions never fail for want of it
+                    pass
+                finally:
+                    self._drug_names_loading = False
+
+            threading.Thread(target=load, daemon=True).start()
+        return []
+
     def brand(self, name: str) -> dict | None:
         """What a brand the patient took contains ('Dolo 650' -> paracetamol 650 mg)."""
         n = normalize(name)

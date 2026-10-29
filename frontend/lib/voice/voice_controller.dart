@@ -144,13 +144,27 @@ class VoiceController extends Notifier<VoiceState> {
         }
       },
     );
+    final visit = ref.read(intakeProvider);
+    final known = visit.patient.toVoiceFields();
+    final language = ref.read(languageProvider);
     link.send(
       jsonEncode({
         'type': 'start',
         'smartBand': ref.read(kioskConfigProvider).smartBand,
-        // Dr. Medora asks which language the patient is comfortable with
-        // and answers with a 'language' event.
-        'language': 'auto',
+        // Malayalam chosen on the welcome page: she greets in Malayalam.
+        // Otherwise she greets in English and follows the patient's
+        // language ('auto', answered with a 'language' event); a visit
+        // already under way stays in its language.
+        'language': language == AppLanguage.malayalam
+            ? 'ml'
+            : known.isEmpty
+            ? 'auto'
+            : 'en',
+        // After a reload mid-visit: what was already said, so Dr. Medora
+        // carries on instead of starting over, and the band is not shown
+        // again if it already measured.
+        if (known.isNotEmpty) 'known': known,
+        if (visit.vitals.hasAny) 'vitalsTaken': true,
       }),
     );
   }

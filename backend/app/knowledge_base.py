@@ -424,6 +424,10 @@ class KnowledgeIndex:
         ]
         return Evidence(matches=matches, unmatched=unmatched, candidates=candidates)
 
+    def disease_names(self) -> list[str]:
+        """Every disease name held in memory (for the doctor's type-ahead)."""
+        return [name for name, _, _ in self._diseases.values() if name]
+
     def mentions_drug(self, text: str) -> bool:
         """True when the text names a medicine from the knowledge base."""
         words = normalize(text).split()

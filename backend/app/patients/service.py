@@ -44,6 +44,42 @@ def lookup(db: Session, tenant_id: str, phone: str) -> list[dict]:
     return [{"id": p.id, "label": mask(p.name), "age": age_of(p), "gender": p.gender} for p in rows]
 
 
+def visit_code(value: str) -> str:
+    """"ab12-cd" -> "ab12cd": a visit number as typed (the session id's
+    first 6 characters, printed upper case on the report)."""
+    return re.sub(r"[^0-9a-z]", "", (value or "").lower())
+
+
+def lookup_visit(db: Session, tenant_id: str, visit: str) -> list[dict]:
+    """"Have you visited before?" by an earlier visit number: the person
+    that visit belongs to, by full name and age (the user's choice of
+    2026-10-29, so the patient can recognise themselves). Only this
+    hospital's visits; a number shorter than 6 characters finds nothing."""
+    code = visit_code(visit)
+    if len(code) < 6:
+        return []
+    ids = list(
+        db.scalars(
+            select(IntakeSession.patient_id)
+            .where(
+                IntakeSession.tenant_id == tenant_id,
+                IntakeSession.id.like(code + "%"),
+                IntakeSession.patient_id.is_not(None),
+            )
+            .limit(8)
+        )
+    )
+    out, seen = [], set()
+    for patient_id in ids:
+        if patient_id in seen:
+            continue
+        seen.add(patient_id)
+        p = db.get(Patient, patient_id)
+        if p is not None and p.tenant_id == tenant_id:
+            out.append({"id": p.id, "label": p.name or "***", "age": age_of(p), "gender": p.gender})
+    return out
+
+
 def _merge(old: str, new: str) -> str:
     """Comma lists joined without repeats ("none" never stays beside items)."""
     items: list[str] = []

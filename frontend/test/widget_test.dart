@@ -13,7 +13,10 @@ import 'package:medora/band/drivers/qring/qring_band.dart';
 import 'package:medora/config/app_config.dart';
 import 'package:medora/main.dart';
 import 'package:medora/models/intake.dart';
+import 'package:medora/screens/welcome_screen.dart';
+import 'package:medora/state/intake_controller.dart';
 import 'package:medora/state/service_status.dart';
+import 'package:go_router/go_router.dart';
 import 'package:medora/widgets/intake_form.dart';
 
 import 'qring_test.dart' show FakeCentral, FakeRing, fast;
@@ -371,6 +374,100 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     expect(find.text("Let's take your vitals"), findsOneWidget);
+  });
+
+  testWidgets('the language is chosen at the front of the welcome page', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    expect(find.text('HOW WOULD YOU LIKE TO START?'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('welcome-language-ml')));
+    await tester.pump();
+    expect(find.text('എങ്ങനെ തുടങ്ങണം?'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('welcome-language-en')));
+    await tester.pump();
+    expect(find.text('HOW WOULD YOU LIKE TO START?'), findsOneWidget);
+  });
+
+  testWidgets('the form refuses numbers in a name and a wrong phone or email', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await tester.tap(find.byKey(const Key('mode-manual')));
+    await tester.pump(const Duration(milliseconds: 500));
+    final name = find.widgetWithText(TextFormField, 'Full name');
+    await tester.enterText(name, 'Asha2 Rao');
+    // Numbers cannot be typed into a name at all.
+    expect(find.text('Asha Rao'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Phone number'),
+      '12345',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Email (optional)'),
+      'asha@gmail',
+    );
+    await tester.ensureVisible(find.text('Continue'));
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    expect(find.text('Enter a 10-digit mobile number'), findsOneWidget);
+    expect(find.textContaining('Enter a valid email'), findsOneWidget);
+    expect(find.text('Use letters only, no numbers'), findsNothing);
+
+    // +91 and spaces are fine; a single letter is not a name.
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Phone number'),
+      '+91 98765 43210',
+    );
+    await tester.enterText(name, 'A');
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    expect(find.text('Enter a 10-digit mobile number'), findsNothing);
+    expect(find.text('Use letters only, no numbers'), findsOneWidget);
+    expect(indianMobile('098765 43210'), '9876543210');
+    expect(indianMobile('5876543210'), isNull);
+  });
+
+  testWidgets('vitals missed during the conversation are taken on review', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    final context = tester.element(find.byType(WelcomeScreen));
+    final intake = ProviderScope.containerOf(
+      context,
+    ).read(intakeProvider.notifier);
+    intake.start(IntakeMode.voice);
+    intake.setPatient(
+      const PatientIntake(
+        name: 'Asha Rao',
+        age: 34,
+        gender: Gender.female,
+        phone: '9876543210',
+        symptoms: 'fever',
+      ),
+    );
+    GoRouter.of(context).go('/kiosk/review');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // The band (here the simulator) is offered, and confirming waits for it.
+    expect(find.byKey(const Key('review-band')), findsOneWidget);
+    expect(find.text('Continue without vitals'), findsNothing);
+    await tester.ensureVisible(find.text('Confirm and get my report'));
+    await tester.tap(find.text('Confirm and get my report'));
+    await tester.pump();
+    expect(
+      find.text('Please take your vitals with the band first.'),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(find.text('Start measuring'));
+    await tester.tap(find.text('Start measuring'));
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+    expect(find.byKey(const Key('review-band')), findsNothing);
+    expect(find.text('76'), findsWidgets); // the simulator's heart rate
   });
 
   testWidgets('what the patient said lights up the matching chips', (

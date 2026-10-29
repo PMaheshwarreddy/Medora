@@ -47,7 +47,7 @@ _L = {
         "For your doctor to confirm. This is not a diagnosis.",
         "ഡോക്ടർ ഉറപ്പാക്കേണ്ടവ. ഇത് രോഗനിർണ്ണയമല്ല.",
     ),
-    "medicines": ("Medicines the doctor may consider", "ഡോക്ടർ പരിഗണിച്ചേക്കാവുന്ന മരുന്നുകൾ"),
+    "medicines": ("Medications the doctor may consider", "ഡോക്ടർ പരിഗണിച്ചേക്കാവുന്ന മരുന്നുകൾ"),
     "medicines_note": (
         "The doctor decides on these. Do not take, stop or change any medicine until your doctor tells you.",
         "ഇവ ഡോക്ടറാണ് തീരുമാനിക്കുക. ഡോക്ടർ പറയുന്നതുവരെ ഒരു മരുന്നും കഴിക്കുകയോ നിർത്തുകയോ മാറ്റുകയോ ചെയ്യരുത്.",
@@ -218,7 +218,7 @@ def render_pdf(session: IntakeSession, report: dict) -> bytes:
     department = report["department"]
     story = [
         p(_say(_L["title"], code), h1),
-        p(session.created_at.strftime("%d %b %Y, %H:%M UTC") + f"  |  Reference {session.id[:8].upper()}", small),
+        p(session.created_at.strftime("%d %b %Y, %H:%M UTC") + f"  |  Visit number {session.id[:6].upper()}", small),
         Spacer(1, 8),
         grid(
             [
@@ -227,11 +227,15 @@ def render_pdf(session: IntakeSession, report: dict) -> bytes:
             ]
         ),
         *title("patient"),
+        # Empty details are left out rather than shown blank or as "None".
         grid(
             [
                 (_L["name"], [p(info.get("name") or "")]),
-                (_L["age"], [p(f"{info.get('age')} / {_say(gender, code)}")]),
-                (_L["phone"], [p(info.get("phone") or "")]),
+                (_L["age"], [p(" / ".join(x for x in (
+                    "" if info.get("age") is None else str(info["age"]),
+                    _say(gender, code) if info.get("gender") else "",
+                ) if x))]),
+                *([(_L["phone"], [p(info["phone"])])] if info.get("phone") else []),
             ]
         ),
     ]
@@ -268,6 +272,8 @@ def render_pdf(session: IntakeSession, report: dict) -> bytes:
         rows = []
         for c in view["conditions"]:
             chance = _LIKELIHOOD.get(c.get("likelihood"), ("Less likely", "സാധ്യത കുറവ്"))
+            if c.get("probability") is not None:  # the AI's estimate, as the doctor sees it
+                chance = tuple(f"{x} · {c['probability']}%" for x in chance)
             content = [*both(c["name"], strong), *both(c.get("about"), small)]
             rows.append((chance, content))
         story.append(grid(rows))

@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/strings.dart';
 import '../state/kiosk_context.dart';
+import '../state/service_status.dart';
 import '../api/api_client.dart';
 import '../models/intake.dart';
 import '../state/intake_controller.dart';
@@ -141,6 +142,8 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // The QR code uses the server's network address: rebuild when it is known.
+    ref.watch(serviceStatusProvider);
     final text = Theme.of(context).textTheme;
     final s = S.of(context);
     final report = _report;

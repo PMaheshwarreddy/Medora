@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     gemini_live_model: str = "gemini-3.1-flash-live-preview"
     # Prebuilt voice for Dr. Medora (for example Kore, Aoede, Puck, Charon).
     gemini_voice: str = "Kore"
+    # Vitals are taken at every visit (the user's rule of 2026-10-29: "vitals
+    # are a must"). False brings back the per-complaint decision
+    # (vitals_need.py), which waived them for e.g. a sprain or a rash.
+    vitals_always: bool = True
     gemini_text_model: str = "gemini-2.5-flash"
     # Model for the final report only: the writer (summary, medicines, doses),
     # the condition check and the pharmacist review. Empty = gemini_text_model.
