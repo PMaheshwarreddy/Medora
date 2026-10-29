@@ -1,0 +1,36 @@
+[project]
+name = "medora-backend"
+version = "0.1.0"
+description = "Medora API: intake sessions, knowledge data and client configuration"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+    "pydantic-settings>=2.4",
+    "python-multipart>=0.0.9",
+    "google-genai>=2.29.0",
+    "httpx>=0.28.1",
+    "reportlab>=5.0.1",
+    "ijson>=3.5.1",
+    "crewai>=1.15.27",
+    "numpy>=2.5.4",
+    "uharfbuzz>=0.56.3",
+    "pdfplumber>=0.11.10",
+    "pypdfium2>=5.14.0",
+    "onnxruntime>=1.31.0",
+    "tokenizers>=0.23.3",
+    "lxml>=6.1.3",
+    "openpyxl>=3.1.5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "httpx>=0.27",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -1,0 +1,25 @@
+# Secrets
+.env
+*.env
+!.env.example
+
+# Source datasets (large, some licensed "all rights reserved"); shared separately
+medora_2/
+medora_4/
+medora_5/
+medora6/
+medora_datasets*/
+
+# Vendor band SDK (not ours to publish)
+SDK/
+
+# Models, caches, downloads (backend/data is 1.7 GB)
+backend/data/
+backend/eval/*_results.json
+
+# Build output and tool caches
+frontend/build/
+.venv/
+__pycache__/
+.pytest_cache/
+.dart_tool/

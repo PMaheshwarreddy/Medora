@@ -1,0 +1,30 @@
+{
+  "status": "DRAFT written by Claude on 2026-10-27: a doctor must confirm each expected answer before these numbers are trusted.",
+  "how": "Each case is a question as the report pipeline asks it. 'expect' lists words of which at least one must appear in the breadcrumb (source > topic > section) of a passage in the top k for the case to count as found.",
+  "cases": [
+    {"q": "woman with fever, myalgia, headache, retro-orbital pain for 3 days", "kind": "diagnosis", "expect": ["dengue"]},
+    {"q": "man with fever with chills and rigors every other day for 5 days", "kind": "diagnosis", "expect": ["malaria"]},
+    {"q": "adult with fever for 8 days, abdominal pain, constipation", "kind": "diagnosis", "expect": ["typhoid", "enteric"]},
+    {"q": "child with cough and fast breathing for 2 days", "kind": "diagnosis", "expect": ["pneumonia"]},
+    {"q": "child with loose watery stools and vomiting for 1 day", "kind": "diagnosis", "expect": ["diarrh", "dehydration"]},
+    {"q": "man with cough for 3 weeks, evening fever, weight loss", "kind": "diagnosis", "expect": ["tuberculosis", "tb"]},
+    {"q": "man with central chest pain radiating to left arm and sweating", "kind": "diagnosis", "expect": ["coronary", "myocardial", "chest pain"]},
+    {"q": "man with sudden weakness of right arm and leg and slurred speech", "kind": "diagnosis", "expect": ["stroke"]},
+    {"q": "woman with burning urination and frequency for 2 days", "kind": "diagnosis", "expect": ["urinary", "uti"]},
+    {"q": "child with wheeze and breathlessness at night", "kind": "diagnosis", "expect": ["asthma", "wheez"]},
+    {"q": "man bitten by a snake on the leg one hour ago", "kind": "diagnosis", "expect": ["snake"]},
+    {"q": "child with fever and a fit lasting 2 minutes", "kind": "diagnosis", "expect": ["seizure", "febrile"]},
+    {"q": "diabetic with vomiting, abdominal pain and rapid breathing", "kind": "diagnosis", "expect": ["ketoacidosis"]},
+    {"q": "newborn with yellow skin on day 3", "kind": "diagnosis", "expect": ["jaundice"]},
+    {"q": "young man with pain in the right lower abdomen and vomiting", "kind": "diagnosis", "expect": ["appendic"]},
+    {"q": "Dengue fever treatment and dose for adult", "kind": "treatment", "expect": ["dengue", "paracetamol"]},
+    {"q": "Malaria treatment and dose for adult", "kind": "treatment", "expect": ["malaria", "artemether", "artesunate", "chloroquine", "primaquine"]},
+    {"q": "Typhoid fever treatment and dose for adult", "kind": "treatment", "expect": ["typhoid", "enteric", "azithromycin", "ceftriaxone", "cefixime"]},
+    {"q": "Community acquired pneumonia treatment and dose for adult", "kind": "treatment", "expect": ["pneumonia", "amoxicillin"]},
+    {"q": "Acute diarrhoea treatment and dose for child", "kind": "treatment", "expect": ["diarrh", "ors", "oral rehydration", "zinc"]},
+    {"q": "Hypertension treatment and dose for adult", "kind": "treatment", "expect": ["hypertension", "amlodipine", "telmisartan", "enalapril"]},
+    {"q": "Type 2 diabetes treatment and dose for adult", "kind": "treatment", "expect": ["diabetes", "metformin"]},
+    {"q": "Urinary tract infection treatment and dose for woman", "kind": "treatment", "expect": ["urinary", "nitrofurantoin", "uti"]},
+    {"q": "Scabies treatment and dose for adult", "kind": "treatment", "expect": ["scabies", "permethrin"]}
+  ]
+}
